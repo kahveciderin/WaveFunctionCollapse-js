@@ -1,0 +1,30 @@
+body{
+    background-color: azure;
+}
+.preview-container{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+}
+.preview-pane{
+    display: flex;
+    width: min(70vw, 70vh);
+    height: min(70vw, 70vh);
+    background-color: brown;
+    flex-direction: column;
+}
+.preview-row{
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    align-items: center;
+    flex: 1;
+    background-color: beige;
+}
+.preview-cell{
+    flex: 1;
+    height: 100%;
+}
