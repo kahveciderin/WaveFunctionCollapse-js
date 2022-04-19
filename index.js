@@ -1,8 +1,8 @@
 const GRID_SIZE = 16;
 
 const getRelativeCell = (grid, index, x, y) => {
-    const rel_x = x + (index % GRID_SIZE);
-    const rel_y = y + Math.floor(index / GRID_SIZE);
+    let rel_x = x + (index % GRID_SIZE);
+    let rel_y = y + Math.floor(index / GRID_SIZE);
     if (rel_x < 0) {
         rel_x += GRID_SIZE;
     }
@@ -46,7 +46,7 @@ class WaveFunctionCollapse {
         this.cellEntropy = []
         for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
             this.cellEntropy.push([])
-            for(let j = 0; j < this.cellPool.length; j++) {
+            for (let j = 0; j < this.cellPool.length; j++) {
                 this.cellEntropy[i].push(j)
             }
         }
@@ -68,11 +68,16 @@ class WaveFunctionCollapse {
     tryDecideCell() {
         const cellStart = this.findCellWithLowestEntropy()
         const cellType = this.cellPool[Math.floor(this.cellEntropy[cellStart].random * this.cellEntropy[cellStart].length)]
-        this.cellEntropy = this.cellEntropy.map((entropies, index) => {
-                entropies.forEach(entropy => {
-                    
-                })
-        }) // this is O(n^2). BAD!
+        this.cellEntropy.forEach((entropies, index) => {
+
+            entropies.forEach(entropy => {
+                const isAllowed = this.constraints[entropy].check(index, this.cellEntropy)
+                if (!isAllowed) {
+                    this.cellEntropy[index] = this.cellEntropy[index].filter(e => e !== entropy)
+                }
+            })
+
+        }) // this is O(n^3). BAD!
         return cellType
     }
 
@@ -84,6 +89,12 @@ class WaveFunctionCollapse {
         //     cell.updateCell()
         //     return cell
         // })
+        for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+            const cellIndex = this.findCellWithLowestEntropy()
+            const decidedCell = this.tryDecideCell()
+            this.placedCells[cellIndex].cell = this.cellPool[decidedCell]
+            this.placedCells[cellIndex].updateCell()
+        }
     }
 }
 
