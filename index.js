@@ -1,4 +1,15 @@
-const GRID_SIZE = 16;
+const GRID_SIZE = 4;
+
+const findCommonElement = (array1, array2) => {
+    for (let i = 0; i < array1.length; i++) {
+        for (let j = 0; j < array2.length; j++) {
+            if (array1[i] === array2[j]) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 const getRelativeCell = (grid, index, x, y) => {
     let rel_x = x + (index % GRID_SIZE);
@@ -43,41 +54,52 @@ class WaveFunctionCollapse {
         this.cellPool = cellPool;
         this.constraints = constraints;
         this.placedCells = [];
-        this.cellEntropy = []
-        for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-            this.cellEntropy.push([])
-            for (let j = 0; j < this.cellPool.length; j++) {
-                this.cellEntropy[i].push(j)
-            }
-        }
+        this.cellEntropy = [...Array(GRID_SIZE * GRID_SIZE).keys()]
+            .map(() => [...Array(this.cellPool.length).keys()])
     }
 
+    /**
+     * @name findCellWithLowestEntropy
+     * @description Finds the cell with the lowest entropy
+     * 
+     * @returns {number} index of one of the cells with the lowest entropy
+     */
     findCellWithLowestEntropy() {
         let lowestEntropy = Infinity;
-        let lowestEntropyIndex = -1;
+        let entropyRandomness = {}
         for (let i = 0; i < this.cellEntropy.length; i++) {
             const entropy = this.cellEntropy[i].length
             if (entropy < lowestEntropy) {
                 lowestEntropy = entropy;
-                lowestEntropyIndex = i;
+                entropyRandomness = {}
+                entropyRandomness[i] = this.placedCells[i].random
+            } else if (entropy === lowestEntropy) {
+                entropyRandomness[i] = this.placedCells[i].random
             }
         }
+        const lowestEntropyIndex = Object.keys(entropyRandomness).sort((a, b) => entropyRandomness[a] - entropyRandomness[b])[0]
         return lowestEntropyIndex;
     }
 
-    tryDecideCell() {
-        const cellStart = this.findCellWithLowestEntropy()
-        const cellType = this.cellPool[Math.floor(this.cellEntropy[cellStart].random * this.cellEntropy[cellStart].length)]
+    tryDecideCell(cellIndex) {
+        // console.log("cell entropies:", this.cellEntropy)
+        const randomDecision = this.placedCells[cellIndex].getRandom(this.cellEntropy[cellIndex].length)
+        // console.log("random decision:", randomDecision)
+        // console.log("ce length", this.cellEntropy[cellIndex].length)
+        const cellType = this.cellEntropy[cellIndex][randomDecision]
+        this.cellEntropy[cellIndex] = cellType // do not try overwriting this cell on the next pass, so destroy the array and instead put the id. this is also going to be used in constraints to check if the cell is allowed
+        console.log("placing cell:", cellType, "at", cellIndex)
         this.cellEntropy.forEach((entropies, index) => {
-
+            if (!Array.isArray(entropies)) return
             entropies.forEach(entropy => {
                 const isAllowed = this.constraints[entropy].check(index, this.cellEntropy)
+                console.log("checking constraint", this.constraints[entropy], "at", index, "is allowed:", isAllowed)
                 if (!isAllowed) {
                     this.cellEntropy[index] = this.cellEntropy[index].filter(e => e !== entropy)
                 }
             })
-
         }) // this is O(n^3). BAD!
+        console.log("cell entropies:", JSON.stringify(this.cellEntropy))
         return cellType
     }
 
@@ -90,8 +112,11 @@ class WaveFunctionCollapse {
         //     return cell
         // })
         for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+            // console.log("trying", i)
             const cellIndex = this.findCellWithLowestEntropy()
-            const decidedCell = this.tryDecideCell()
+            // console.log("found cell with lowest entropy:", cellIndex)
+            const decidedCell = this.tryDecideCell(cellIndex)
+            // console.log("decided cell:", decidedCell)
             this.placedCells[cellIndex].cell = this.cellPool[decidedCell]
             this.placedCells[cellIndex].updateCell()
         }
@@ -116,20 +141,22 @@ class NeighborConstraint extends Constraint {
         const upCell = getRelativeCell(gridArray, index, 0, -1)
         const downCell = getRelativeCell(gridArray, index, 0, 1)
 
-        return this.allowedNeighbors.includes(leftCell) ||
-            this.allowedNeighbors.includes(rightCell) ||
-            this.allowedNeighbors.includes(upCell) ||
-            this.allowedNeighbors.includes(downCell)
+        const leftCellFits = Array.isArray(leftCell) ? findCommonElement(leftCell, this.allowedNeighbors) : this.allowedNeighbors.includes(leftCell)
+        const rightCellFits = Array.isArray(rightCell) ? findCommonElement(rightCell, this.allowedNeighbors) : this.allowedNeighbors.includes(rightCell)
+        const upCellFits = Array.isArray(upCell) ? findCommonElement(upCell, this.allowedNeighbors) : this.allowedNeighbors.includes(upCell)
+        const downCellFits = Array.isArray(downCell) ? findCommonElement(downCell, this.allowedNeighbors) : this.allowedNeighbors.includes(downCell)
+
+        return leftCellFits && rightCellFits && upCellFits && downCellFits
     }
 }
 
 const wfc = new WaveFunctionCollapse([
     new Cell('#ff0000'),
-    new Cell('#ffff00'),
+    new Cell('#7f7f00'),
     new Cell('#00ff00'),
-    new Cell('#00ffff'),
+    new Cell('#007f7f'),
     new Cell('#0000ff'),
-    new Cell('#ff00ff'),
+    new Cell('#7f007f'),
 ], {
     0: new NeighborConstraint(5, 0, 1),
     1: new NeighborConstraint(0, 1, 2),
