@@ -1,4 +1,4 @@
-const GRID_SIZE = 3;
+const GRID_SIZE = 4;
 const RANDOM_PLACEMENT = true // is placement random for cells with the same entropy
 
 const findCommonElement = (array1, array2) => {
@@ -68,18 +68,23 @@ class WaveFunctionCollapse {
      * @returns {number} index of one of the cells with the lowest entropy
      */
     findCellWithLowestEntropy(isRandom) {
+        if(isRandom) {
+            const entropyList = this.placedCells.map((e, i) => [i, e]).filter(cell => !cell[0].cell)
+            console.log("entropyList", entropyList.map(a=>a))
+            const randomIndex = Math.floor(Math.random() * entropyList.length)
+            const randomEntropy = entropyList[randomIndex][0]
+            return randomEntropy
+        }
         let lowestEntropy = Infinity;
         let entropyRandomness = {}
         for (let i = 0; i < this.cellEntropy.length; i++) {
             const entropy = this.cellEntropy[i].length
-            if (entropy < lowestEntropy && !isRandom) {
+            if (entropy < lowestEntropy) {
                 lowestEntropy = entropy;
                 entropyRandomness = {}
                 entropyRandomness[i] = this.placedCells[i].random
-            } else if (entropy === lowestEntropy || isRandom) {
-                if (Array.isArray(this.cellEntropy[i])) {
-                    entropyRandomness[i] = this.placedCells[i].random
-                }
+            } else if (entropy === lowestEntropy) {
+                entropyRandomness[i] = this.placedCells[i].random
             }
         }
         if (RANDOM_PLACEMENT) return Object.keys(entropyRandomness).sort((a, b) => entropyRandomness[a] - entropyRandomness[b])[0]
@@ -87,7 +92,7 @@ class WaveFunctionCollapse {
     }
 
     tryDecideCell(cellIndex) {
-        if(!Array.isArray(this.cellEntropy[cellIndex])) return this.cellEntropy[cellIndex]
+        if (!Array.isArray(this.cellEntropy[cellIndex])) return this.cellEntropy[cellIndex]
         const randomDecision = this.placedCells[cellIndex].getRandom(this.cellEntropy[cellIndex].length)
         const cellType = this.cellEntropy[cellIndex][randomDecision]
         this.cellEntropy[cellIndex] = cellType // do not try overwriting this cell on the next pass, so destroy the array and instead put the id. this is also going to be used in constraints to check if the cell is allowed
@@ -112,21 +117,29 @@ class WaveFunctionCollapse {
     placeOne(callback) {
         if (this.counter >= GRID_SIZE * GRID_SIZE) return
         this.counter++
-        let cellIndex = this.findCellWithLowestEntropy(this.counter < GRID_SIZE)
+        let cellIndex = this.findCellWithLowestEntropy(this.counter < GRID_SIZE * 2)
         let decidedCell = undefined
-        console.log("cellIndex", cellIndex)
-        console.log("cellEntropy", this.cellEntropy)
+        // console.log("cellIndex", cellIndex)
+        // console.log("cellEntropy", this.cellEntropy)
         let timeout = 0
-        while (!decidedCell) {
-            if(timeout > 8) {
-                cellIndex = this.findCellWithLowestEntropy(this.counter < GRID_SIZE)
+        let timeoutCounter = 0
+        while (decidedCell === undefined) {
+            if (timeout > 8) {
+                cellIndex = this.findCellWithLowestEntropy(this.counter < GRID_SIZE * 2)
+                console.log("TIMEOUT cellIndex", cellIndex)
+                timeout = 0
+                timeoutCounter++
+            }
+            if (timeoutCounter > 8) {
+                break
             }
             timeout++
             decidedCell = this.tryDecideCell(cellIndex)
         }
-        console.log("decidedCell", decidedCell)
+        // console.log("decidedCell", decidedCell)
         this.placedCells[cellIndex].cell = this.cellPool[decidedCell]
         this.placedCells[cellIndex].updateCell()
+        console.log("placed cell #", this.counter)
         if (callback) {
             callback()
         }
