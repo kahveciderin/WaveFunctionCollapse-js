@@ -6,7 +6,7 @@ body{
     justify-content: center;
     align-items: center;
     width: 100vw;
-    height: 100vh;
+    height: 80vh;
 }
 .preview-pane{
     display: flex;
@@ -27,4 +27,17 @@ body{
 .preview-cell{
     flex: 1;
     height: 100%;
+}
+.place-next{
+    margin: auto;
+    text-align: center;
+}
+.place-next button{
+    background-color: lightgreen;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
 }

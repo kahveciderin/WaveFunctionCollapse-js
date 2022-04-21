@@ -1,4 +1,5 @@
-const GRID_SIZE = 4;
+const GRID_SIZE = 3;
+const RANDOM_PLACEMENT = true // is placement random for cells with the same entropy
 
 const findCommonElement = (array1, array2) => {
     for (let i = 0; i < array1.length; i++) {
@@ -26,7 +27,7 @@ const getRelativeCell = (grid, index, x, y) => {
     if (rel_y >= GRID_SIZE) {
         rel_y -= GRID_SIZE;
     }
-    return grid[index + x + y * GRID_SIZE];
+    return grid[rel_x + rel_y * GRID_SIZE];
 }
 
 class Cell {
@@ -42,7 +43,8 @@ class PlacedCell {
         this.random = Math.random()
     }
     getRandom(max) {
-        return Math.floor(this.random * max);
+        // return Math.floor((this.random * max * max) % max);
+        return Math.floor(Math.random() * max);
     }
     updateCell() {
         this.cellDOM.style.backgroundColor = this.cell.color;
@@ -56,6 +58,7 @@ class WaveFunctionCollapse {
         this.placedCells = [];
         this.cellEntropy = [...Array(GRID_SIZE * GRID_SIZE).keys()]
             .map(() => [...Array(this.cellPool.length).keys()])
+        this.counter = 0
     }
 
     /**
@@ -64,62 +67,82 @@ class WaveFunctionCollapse {
      * 
      * @returns {number} index of one of the cells with the lowest entropy
      */
-    findCellWithLowestEntropy() {
+    findCellWithLowestEntropy(isRandom) {
         let lowestEntropy = Infinity;
         let entropyRandomness = {}
         for (let i = 0; i < this.cellEntropy.length; i++) {
             const entropy = this.cellEntropy[i].length
-            if (entropy < lowestEntropy) {
+            if (entropy < lowestEntropy && !isRandom) {
                 lowestEntropy = entropy;
                 entropyRandomness = {}
                 entropyRandomness[i] = this.placedCells[i].random
-            } else if (entropy === lowestEntropy) {
-                entropyRandomness[i] = this.placedCells[i].random
+            } else if (entropy === lowestEntropy || isRandom) {
+                if (Array.isArray(this.cellEntropy[i])) {
+                    entropyRandomness[i] = this.placedCells[i].random
+                }
             }
         }
-        const lowestEntropyIndex = Object.keys(entropyRandomness).sort((a, b) => entropyRandomness[a] - entropyRandomness[b])[0]
-        return lowestEntropyIndex;
+        if (RANDOM_PLACEMENT) return Object.keys(entropyRandomness).sort((a, b) => entropyRandomness[a] - entropyRandomness[b])[0]
+        return Object.keys(entropyRandomness)[0]
     }
 
     tryDecideCell(cellIndex) {
-        // console.log("cell entropies:", this.cellEntropy)
+        if(!Array.isArray(this.cellEntropy[cellIndex])) return this.cellEntropy[cellIndex]
         const randomDecision = this.placedCells[cellIndex].getRandom(this.cellEntropy[cellIndex].length)
-        // console.log("random decision:", randomDecision)
-        // console.log("ce length", this.cellEntropy[cellIndex].length)
         const cellType = this.cellEntropy[cellIndex][randomDecision]
         this.cellEntropy[cellIndex] = cellType // do not try overwriting this cell on the next pass, so destroy the array and instead put the id. this is also going to be used in constraints to check if the cell is allowed
-        console.log("placing cell:", cellType, "at", cellIndex)
+        const cellEntropyClone = []
         this.cellEntropy.forEach((entropies, index) => {
-            if (!Array.isArray(entropies)) return
+            if (!Array.isArray(entropies)) return cellEntropyClone.push(entropies)
+            const entropyClone = []
             entropies.forEach(entropy => {
-                const isAllowed = this.constraints[entropy].check(index, this.cellEntropy)
-                console.log("checking constraint", this.constraints[entropy], "at", index, "is allowed:", isAllowed)
-                if (!isAllowed) {
-                    this.cellEntropy[index] = this.cellEntropy[index].filter(e => e !== entropy)
+                const constraintToCheck = this.constraints[entropy] || new NoConstraint()
+                const isAllowed = constraintToCheck.check(index, this.cellEntropy)
+                if (isAllowed) {
+                    entropyClone.push(entropy)
+                } else {
+                    // this.cellEntropy[index] = this.cellEntropy[index].filter(e => e !== entropy)
                 }
             })
+            cellEntropyClone.push(entropyClone)
         }) // this is O(n^3). BAD!
-        console.log("cell entropies:", JSON.stringify(this.cellEntropy))
+        this.cellEntropy = cellEntropyClone
         return cellType
     }
-
-    fill() {
-        // this.placedCells = this.placedCells.map((cell, index) => {
-        //     const cellRandom = cell.getRandom(this.cellPool.length)
-        //     const decidedCell = this.cellPool[cellRandom]
-        //     cell.cell = decidedCell
-        //     cell.updateCell()
-        //     return cell
-        // })
-        for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-            // console.log("trying", i)
-            const cellIndex = this.findCellWithLowestEntropy()
-            // console.log("found cell with lowest entropy:", cellIndex)
-            const decidedCell = this.tryDecideCell(cellIndex)
-            // console.log("decided cell:", decidedCell)
-            this.placedCells[cellIndex].cell = this.cellPool[decidedCell]
-            this.placedCells[cellIndex].updateCell()
+    placeOne(callback) {
+        if (this.counter >= GRID_SIZE * GRID_SIZE) return
+        this.counter++
+        let cellIndex = this.findCellWithLowestEntropy(this.counter < GRID_SIZE)
+        let decidedCell = undefined
+        console.log("cellIndex", cellIndex)
+        console.log("cellEntropy", this.cellEntropy)
+        let timeout = 0
+        while (!decidedCell) {
+            if(timeout > 8) {
+                cellIndex = this.findCellWithLowestEntropy(this.counter < GRID_SIZE)
+            }
+            timeout++
+            decidedCell = this.tryDecideCell(cellIndex)
         }
+        console.log("decidedCell", decidedCell)
+        this.placedCells[cellIndex].cell = this.cellPool[decidedCell]
+        this.placedCells[cellIndex].updateCell()
+        if (callback) {
+            callback()
+        }
+    }
+    fill() {
+        for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+            this.placeOne()
+        }
+    }
+    print() {
+        const _print = () => {
+            this.placeOne(() => {
+                setTimeout(_print, 0)
+            })
+        }
+        _print()
     }
 }
 
@@ -140,13 +163,25 @@ class NeighborConstraint extends Constraint {
         const rightCell = getRelativeCell(gridArray, index, 1, 0)
         const upCell = getRelativeCell(gridArray, index, 0, -1)
         const downCell = getRelativeCell(gridArray, index, 0, 1)
+        const leftUpCell = getRelativeCell(gridArray, index, -1, -1)
+        const rightUpCell = getRelativeCell(gridArray, index, 1, -1)
+        const leftDownCell = getRelativeCell(gridArray, index, -1, 1)
+        const rightDownCell = getRelativeCell(gridArray, index, 1, 1)
+        const neighbors = [leftCell, rightCell, upCell, downCell, leftUpCell, rightUpCell, leftDownCell, rightDownCell]
+        const fits = neighbors.reduce((accum, neigh) => accum &&
+            (Array.isArray(neigh) ?
+                /* findCommonElement(neigh, this.allowedNeighbors) */ true :
+                this.allowedNeighbors.includes(neigh)), true)
 
-        const leftCellFits = Array.isArray(leftCell) ? findCommonElement(leftCell, this.allowedNeighbors) : this.allowedNeighbors.includes(leftCell)
-        const rightCellFits = Array.isArray(rightCell) ? findCommonElement(rightCell, this.allowedNeighbors) : this.allowedNeighbors.includes(rightCell)
-        const upCellFits = Array.isArray(upCell) ? findCommonElement(upCell, this.allowedNeighbors) : this.allowedNeighbors.includes(upCell)
-        const downCellFits = Array.isArray(downCell) ? findCommonElement(downCell, this.allowedNeighbors) : this.allowedNeighbors.includes(downCell)
-
-        return leftCellFits && rightCellFits && upCellFits && downCellFits
+        return fits
+    }
+}
+class NoConstraint extends Constraint {
+    constructor() {
+        super()
+    }
+    check(index, gridArray) {
+        return true
     }
 }
 
@@ -179,6 +214,9 @@ window.addEventListener('load', () => {
         }
         document.querySelector('.preview-pane').appendChild(previewRow);
     }
+    wfc.print()
+    // document.querySelector('.place-next button').addEventListener('click', () => {
+    //     wfc.placeOne()
+    // })
 
-    wfc.fill()
 })
